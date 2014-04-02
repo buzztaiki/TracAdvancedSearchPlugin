@@ -41,6 +41,11 @@ CONFIG_FIELD = {
 		'async_queue_maxsize',
 		0,
 	),
+	'default_operator': (
+		CONFIG_SECTION_NAME,
+		'default_operator',
+		'OR',
+	),
 }
 
 
@@ -233,6 +238,7 @@ class PySolrSearchBackEnd(Component):
 			self.indexer.start()
 		else:
 			self.indexer = SolrIndexer(self)
+		self.default_operator = self.config.get(*CONFIG_FIELD['default_operator'])
 
 	def get_name(self):
 		"""Return friendly name for this IAdvSearchBackend provider."""
@@ -256,6 +262,8 @@ class PySolrSearchBackEnd(Component):
 			'fl': '*,score', # fields returned
 			'rows': criteria.get('per_page', 15),
 			'defType': 'lucene',
+			# see http://wiki.apache.org/solr/ExtendedDisMax#mm_.28Minimum_.27Should.27_Match.29
+			'mm': self._minimum_should_match(),
 		}
 
 		if criteria.get('sort_order') == 'oldest':
@@ -286,6 +294,7 @@ class PySolrSearchBackEnd(Component):
 			# favor phrases in the ticket body, exact matches in the name
 			"pf='token_text name^2 ticket_id'",
 			"qf='token_text name^2 ticket_id component milestone keywords'",
+			'mm=$mm',
 			'v=$qq',
 		])
 
@@ -390,3 +399,13 @@ class PySolrSearchBackEnd(Component):
 	def _strptime(self, date_string, date_format):
 		return datetime.datetime(*(time.strptime(date_string, date_format)[0:6]))
 
+
+	def _minimum_should_match(self):
+		# see http://wiki.apache.org/solr/ExtendedDisMax#mm_.28Minimum_.27Should.27_Match.29
+		mm = {'AND': '100%', 'OR': '0%'}
+		op = self.default_operator.upper()
+		if op in mm:
+			return mm[op]
+		else:
+			self.log.warn("Invalid default_operator: %s" % op)
+			return mm['OR']

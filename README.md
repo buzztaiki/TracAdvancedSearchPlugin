@@ -102,6 +102,14 @@ async_queue_maxsize = 10000  # if 0, the queue size is infinity
 ...
 ```
 
+If you want to search with all words as a default, add like this:
+
+```
+[pysolr_search_backend]
+default_operator = AND
+...
+```
+
 You'll also need to enable the components.
 
 ```
