@@ -255,12 +255,7 @@ class PySolrSearchBackEnd(Component):
 		params = {
 			'fl': '*,score', # fields returned
 			'rows': criteria.get('per_page', 15),
-			# see https://cwiki.apache.org/confluence/display/solr/The+DisMax+Query+Parser
-			'defType': 'edismax',
-			# favor phrases in the ticket body, exact matches in the name
-			'pf': 'token_text name^2 ticket_id',
-			'qf': 'token_text name^2 ticket_id component milestone keywords',
-
+			'defType': 'lucene',
 		}
 
 		if criteria.get('sort_order') == 'oldest':
@@ -283,6 +278,17 @@ class PySolrSearchBackEnd(Component):
 			criteria.get('date_end')
 		)
 
+		# use nested query for avoid edismax bug
+		# see https://issues.apache.org/jira/browse/SOLR-2649
+		q['_query_'] = '"{!%s}"' % ' '.join([
+			# see https://cwiki.apache.org/confluence/display/solr/The+DisMax+Query+Parser
+			'type=edismax',
+			# favor phrases in the ticket body, exact matches in the name
+			"pf='token_text name^2 ticket_id'",
+			"qf='token_text name^2 ticket_id component milestone keywords'",
+			'v=$qq',
+		])
+
 		# only include key/value pairs when the value is not empty
 		q_parts = []
 		for k, v in itertools.ifilter(lambda (k, v): v, q.iteritems()):
@@ -295,9 +301,9 @@ class PySolrSearchBackEnd(Component):
 		# distribute our search query to several fields
 		if 'q' in criteria and criteria['q']:
 			# edismax handles escaping for us
-			q_parts.append('(%s)' % criteria['q'])
+			params['qq'] = '(%s)' % criteria['q']
 		else:
-			q_parts.append('*:*')
+			params['qq'] = '*:*'
 
 		q_string = " AND ".join(q_parts)
 
